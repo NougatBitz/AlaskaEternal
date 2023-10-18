@@ -1,3 +1,4 @@
+local UserInputService = game:GetService("UserInputService")
 local Services = setmetatable({}, {
 	__index = function(self, Index)
 		local Value = game.GetService(game, Index)
@@ -7,73 +8,69 @@ local Services = setmetatable({}, {
 		return Value
 	end
 })
+
 Services.UIParent = Services.Players.LocalPlayer:WaitForChild("PlayerGui") -- Services.CoreGui  
+local GuiInset = Services.GuiService:GetGuiInset()
 
+local Theme = {
+	Background_1 = Color3.fromRGB(9, 9, 9);
+	Background_2 = Color3.fromRGB(2, 5, 10);
+	Background_3 = Color3.fromRGB(10, 10, 12);
+	Accent = Color3.fromRGB(25, 147, 212);
+	White = Color3.fromRGB(255,255,255);
+	Gray = Color3.fromRGB(255,255,255);
+	Divider = Color3.fromRGB(12, 37, 50);
+	Font_Bold = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal);
+	Font_Regular = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+	SideGradient = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(0.0117647, 0.0823529, 0.117647)), ColorSequenceKeypoint.new(0.518, Color3.new(0.0235294, 0.0235294, 0.0235294)), ColorSequenceKeypoint.new(0.9, Color3.new(0.0235294, 0.0235294, 0.0235294)), ColorSequenceKeypoint.new(1, Color3.new(0.0235294, 0.0235294, 0.0235294))});
+	SideTransparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0, 0), NumberSequenceKeypoint.new(0.1, 0.238, 0), NumberSequenceKeypoint.new(0.497, 0.631, 0), NumberSequenceKeypoint.new(0.891, 0.294, 0), NumberSequenceKeypoint.new(1, 0.131, 0)});
+};
 
-local Library = {
-	Util = {};
-	Theme = {};
-	Objects = {};
-	ObjectCache = {};
-	Tabs = { Skeletons = {}; };
-	Tweens = {};
-}
-
-Library.__index = Library
-Library.Tabs.__index = Library.Tabs
-
---// Create Util Functions
-function Library.Util:DeepScanTable(Input, Callback, Stack)
-	Stack = Stack or {}
-
-	for Index, Value in next, Input do
-		if (not Stack[Value]) then
-			Stack[Value] = true
-
-			Callback(Index, Value)
-
-			if type(Value) == "table" then
-				self:DeepScanTable(Value, Callback, Stack)
-			end
-		end
-	end
+local BaseTweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear)
+--// Utility
+local function RoundNumber(Number, DecimalPlaces)
+	DecimalPlaces = 10 ^ DecimalPlaces
+	return math.round(Number * DecimalPlaces) / DecimalPlaces
 end
 
-function Library.Util:Round(Number, DecimalPlaces)
-	return tonumber(string.format("%." .. DecimalPlaces .."f", Number))
-end
-
-function Library.Util:OffsetUDim2(V2, OffsetObject)
+local function OffsetUDim2(V2, OffsetObject)
 	local OffsetPosition = OffsetObject.AbsolutePosition
 	return UDim2.new(
 		0, math.round(V2.X - OffsetPosition.X),
-		0, math.round(V2.Y - OffsetPosition.Y)-- + self.Parent.GuiInset.Y
+		0, math.round(V2.Y - OffsetPosition.Y)
 	)
 end
 
-function Library.Util:ConcatTable(Input, Seperator, Invert)
-	local Output, Count = "", 0
+local function ConcatTable(Input, Seperator, Invert)
+	local Size = #Input
+	local Buffer = table.create(Size)
 
-	local Start = (Invert and #Input) or 1
-	local Limit = (Invert and 1) or #Input
-	local Step  = (Invert and -1) or 1
+	local Start, Limit, Step
+
+	if Invert then
+		Start, Limit, Step = Size, 1, -1
+	else
+		Start, Limit, Step = 1, Size, 1
+	end
 
 	for Index = Start, Limit, Step do
 		local Value = Input[Index]
-		if Value ~= nil then
-			Count += 1
-			Output = Output .. tostring(Value) .. Seperator
+
+		if Value == nil then
+			continue
 		end
+
+		table.insert(Buffer, tostring(Value))
 	end
 
-	return Output:sub(1, #Output - #Seperator), Count
+	return table.concat(Buffer, Seperator), #Buffer
 end
 
-function Library.Util:MapValue(Value, MinA, MaxA, MinB, MaxB, DecimalPlaces)
-	return self:Round((1 - ((Value - MinA) / (MaxA - MinA))) * MinB + ((Value - MinA) / (MaxA - MinA)) * MaxB, DecimalPlaces)
+local function MapValue(Value, MinA, MaxA, MinB, MaxB, DecimalPlaces)
+	return RoundNumber((1 - ((Value - MinA) / (MaxA - MinA))) * MinB + ((Value - MinA) / (MaxA - MinA)) * MaxB, DecimalPlaces)
 end
 
-function Library.Util:GetIndexOfValue(Input, Value)
+local function GetIndexOfValue(Input, Value)
 	for Index, _Value in pairs(Input) do
 		if Value == _Value then
 			return Index
@@ -83,7 +80,7 @@ function Library.Util:GetIndexOfValue(Input, Value)
 	return 0
 end
 
-function Library.Util:Create(ClassName, Properties)
+local function Create(ClassName, Properties)
 	local _Instance = Instance.new(ClassName)
 
 	for Property, Value in next, Properties do
@@ -97,7 +94,7 @@ function Library.Util:Create(ClassName, Properties)
 	return _Instance
 end
 
-function Library.Util:Tween(Tweens, Play)
+local function Tween(Tweens, Play)
 	local TweenTable = {}
 
 	for Object, TweenData in next, Tweens do
@@ -105,55 +102,187 @@ function Library.Util:Tween(Tweens, Play)
 	end
 
 	if Play then
-		for _, Tween in next, TweenTable do
-			Tween:Play()
+		for _, TweenObject in next, TweenTable do
+			TweenObject:Play()
 		end
 	end
 
 	return TweenTable
 end
 
-function Library.Util:GetMousePosition()
-	return (Services.UserInputService:GetMouseLocation() + self.Parent.GuiInset)
+local function GetMousePosition()
+	return (Services.UserInputService:GetMouseLocation() + GuiInset)
 end
 
-function Library.Util:GetXInBounds(AbsolutePosition, SliderBounds)
+local function GetXInBounds(AbsolutePosition, SliderBounds)
 	return math.clamp( (AbsolutePosition.X - SliderBounds.AbsolutePosition.X) , 0, SliderBounds.AbsoluteSize.X)
 end
 
-function Library.Util:GetValueFromX(X, SliderBounds, Data)
-	return self:MapValue(X, 0, SliderBounds.AbsoluteSize.X, Data.Min, Data.Max, Data.DecimalPlaces)
+local function GetValueFromX(X, SliderBounds, Data)
+	return MapValue(X, 0, SliderBounds.AbsoluteSize.X, Data.Min, Data.Max, Data.DecimalPlaces)
 end
 
-function Library.Util:XToScale(X, SliderBounds)
+local function XToScale(X, SliderBounds)
 	return X / SliderBounds.AbsoluteSize.X
 end
 
-function Library.Util:SliderUpdateWrapper(SliderBounds, Label, Fill, Data, Object)
+local function SliderUpdateWrapper(SliderBounds, Label, Fill, Data, Object)
 	local PreviousValue = 0/0
 	return function()
-		local MousePosition = self:GetMousePosition()
-		local XInBounds = self:GetXInBounds(MousePosition, SliderBounds)
+		local MousePosition = GetMousePosition()
+		local XInBounds = GetXInBounds(MousePosition, SliderBounds)
 
-		local Value = self:Round(self:GetValueFromX(XInBounds, SliderBounds, Data), Data.DecimalPlaces)
+		local Value = RoundNumber(GetValueFromX(XInBounds, SliderBounds, Data), Data.DecimalPlaces)
 
 		if PreviousValue ~= Value then
 			PreviousValue = Value
 			Object.Callback("Slider", Data.Flag, Value)
 			Label.Text = Data.Format:format(Value)
 		end
-		Fill.Size = UDim2.new(self:XToScale(XInBounds, SliderBounds), 0, 1, -2)
+		Fill.Size = UDim2.new(XToScale(XInBounds, SliderBounds), 0, 1, -2)
 	end
 end
 
-function Library.Util:CreateInformationFrame(Object, Skeleton)
+local function LoadItemList(Dropdown, ItemList, Callback, IsSelectable)
+	local function PlayState(Tweens, State)
+		for _, Tween in next, Tweens[State] do
+			Tween:Play()
+		end
+	end
+
+	local ButtonList = {}
+
+	for Index, Value in ipairs(ItemList) do
+		local IsSelected = (not IsSelectable and true) or (false)
+
+		local Button = Create("TextButton", {
+			FontFace = Theme.Font_Regular;
+			Text = "";
+			TextColor3 = Color3.new(0, 0, 0);
+			TextSize = 14;
+			AutoButtonColor = false;
+			BackgroundColor3 = Theme.Background_2;
+			Position = UDim2.new(0.112, 0, 0.02, 0);
+			Size = UDim2.new(1, -10, 0, 20);
+			ZIndex = 20;
+			Name = "Button";
+			Parent = Dropdown;
+		})
+
+		local UICorner = Create("UICorner", {
+			CornerRadius = UDim.new(0, 4);
+			Parent = Button;
+		})
+
+		local Label = Create("TextLabel", {
+			FontFace = Theme.Font_Regular;
+			RichText = true;
+			Text = Value;
+			TextColor3 = Color3.new(1, 1, 1);
+			TextSize = 16;
+			TextStrokeColor3 = Theme.Background_2;
+			TextWrapped = true;
+			TextXAlignment = Enum.TextXAlignment.Left;
+			AnchorPoint = Vector2.new(0, 0.5);
+			BackgroundColor3 = Color3.new(1, 1, 1);
+			BackgroundTransparency = 1;
+			Position = UDim2.new(0, 5, 0.5, 0);
+			Size = UDim2.new(1, -5, 1, 0);
+			ZIndex = 24;
+			Name = "Label";
+			Parent = Button;
+		})
+
+		local UIStroke = Create("UIStroke", {
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+			Color = Theme.Accent;
+			Parent = Button;
+		})
+
+		local Tweens = {
+			Hover = Tween({
+				[Label] = {BaseTweenInfo, { TextTransparency = 0.35 }};
+				[UIStroke] = {BaseTweenInfo, { Transparency = 0.4 }};
+			});
+			Normal = Tween({
+				[Label] = {BaseTweenInfo, { TextTransparency = 0.7 }};
+				[UIStroke] = {BaseTweenInfo, { Transparency = 0.6 }};
+			});
+			Pressing = Tween({
+				[Label] = {BaseTweenInfo, { TextTransparency = 0.2 }};
+				[UIStroke] = {BaseTweenInfo,  { Transparency = 0.25 }};
+			});
+			Enabled = Tween({
+				[Label] = {BaseTweenInfo, { TextTransparency = 0 }};
+				[UIStroke] = {BaseTweenInfo, { Transparency = 0 }};
+			});
+		}
+
+		local ButtonState, IsHovering = "Normal", false
+
+		Button.MouseButton1Down:Connect(function()
+			PlayState(Tweens, "Pressing")
+		end)
+
+		Button.MouseButton1Up:Connect(function()
+			if (not IsSelectable) then
+				PlayState(Tweens, "Normal")
+			else
+				IsSelected = not IsSelected
+			end
+
+			if IsSelected then
+				ButtonState = "Enabled"
+			else
+				ButtonState = IsHovering and "Hover" or "Normal"
+			end
+			Callback(Index, Value, IsSelected)
+			PlayState(Tweens, ButtonState)
+		end)
+
+		Button.MouseEnter:Connect(function()
+			IsHovering = true
+			ButtonState = "Hover"
+			if IsSelectable and IsSelected then
+				return
+			end
+			PlayState(Tweens, ButtonState)
+		end)
+
+		Button.MouseLeave:Connect(function()
+			IsHovering = false
+			ButtonState = "Normal"
+			if IsSelectable and IsSelected then 
+				return 
+			end
+			PlayState(Tweens, ButtonState)
+		end)
+
+		PlayState(Tweens, "Normal")
+
+		ButtonList[Index] = {
+			Button = Button;
+			Select = function(self, SelectedValue, NoCallback)
+				IsSelected = SelectedValue
+				if IsSelected then
+					task.spawn(PlayState, Tweens, (IsSelected and "Enabled") or "Normal")
+				end
+				Callback(Index, Value, IsSelected, NoCallback)
+			end,
+		}
+	end
+
+	return ButtonList
+end
+
+local function CreateInformationFrame(self, Object, Skeleton)
 	local InformationFrame, Label
-	if self.Parent.ObjectCache[Object] then
-		InformationFrame = self.Parent.ObjectCache[Object]
+	if self.ObjectCache[Object] then
+		InformationFrame = self.ObjectCache[Object]
 		Label = InformationFrame.Label
 	else
-		InformationFrame = self:Create("Frame", {
-			BackgroundColor3 = self.Parent.Theme.Background_2;
+		InformationFrame = Create("Frame", {
+			BackgroundColor3 = Theme.Background_2;
 			Position = UDim2.new(0, 93, 0, 335);
 			Size = UDim2.new(0, 250, 0, 0);
 			ZIndex = 19;
@@ -161,19 +290,19 @@ function Library.Util:CreateInformationFrame(Object, Skeleton)
 			BackgroundTransparency = 1;
 		})
 
-		local UIStroke = self:Create("UIStroke", {
-			Color = self.Parent.Theme.Accent;
+		local UIStroke = Create("UIStroke", {
+			Color = Theme.Accent;
 			Parent = InformationFrame;
 			Transparency = 1;
 		})
 
-		local UICorner = self:Create("UICorner", {
+		local UICorner = Create("UICorner", {
 			CornerRadius = UDim.new(0, 4);
 			Parent = InformationFrame;
 		})
 
-		Label = self:Create("TextLabel", {
-			FontFace = self.Parent.Theme.Font_Regular;
+		Label = Create("TextLabel", {
+			FontFace = Theme.Font_Regular;
 			RichText = true;
 			TextColor3 = Color3.new(1, 1, 1);
 			TextSize = 16;
@@ -192,19 +321,19 @@ function Library.Util:CreateInformationFrame(Object, Skeleton)
 	end
 
 	InformationFrame.Parent = Skeleton
-	self.Parent.ObjectCache[Object] = InformationFrame
+	self.ObjectCache[Object] = InformationFrame
 
 	return InformationFrame, Label
 end
 
-function Library.Util:CreateDropdownHolder(Object, Skeleton)
+function CreateDropdownHolder(self, Object, Skeleton)
 	local Items, ItemHolder
-	if self.Parent.ObjectCache[Object] then
-		Items = self.Parent.ObjectCache[Object]
+	if self.ObjectCache[Object] then
+		Items = self.ObjectCache[Object]
 		ItemHolder = Items.ItemHolder
 	else
-		Items = self:Create("Frame", {
-			BackgroundColor3 = self.Parent.Theme.Background_2;
+		Items = Create("Frame", {
+			BackgroundColor3 = Theme.Background_2;
 			Position = UDim2.new(0, 0, 0, 0);
 			Size = UDim2.new(0, 210, 0, 0);
 			ZIndex = 5;
@@ -212,21 +341,21 @@ function Library.Util:CreateDropdownHolder(Object, Skeleton)
 			Name = "Items";
 		})
 
-		local UIStroke = self:Create("UIStroke", {
-			Color = self.Parent.Theme.Accent;
+		local UIStroke = Create("UIStroke", {
+			Color = Theme.Accent;
 			Parent = Items;
 			Transparency = 1;
 		})
 
-		local UICorner = self:Create("UICorner", {
+		local UICorner = Create("UICorner", {
 			CornerRadius = UDim.new(0, 4);
 			Parent = Items;
 		})
 
-		ItemHolder = self:Create("ScrollingFrame", {
+		ItemHolder = Create("ScrollingFrame", {
 			BottomImage = "";
 			CanvasSize = UDim2.new(1, 0, 0, 0);
-			ScrollBarImageColor3 = self.Parent.Theme.Accent;
+			ScrollBarImageColor3 = Theme.Accent;
 			ScrollBarThickness = 3;
 			TopImage = "";
 			VerticalScrollBarInset = Enum.ScrollBarInset.Always;
@@ -239,14 +368,14 @@ function Library.Util:CreateDropdownHolder(Object, Skeleton)
 			Parent = Items;
 		})
 
-		local UIListLayout = self:Create("UIListLayout", {
+		local UIListLayout = Create("UIListLayout", {
 			HorizontalAlignment = Enum.HorizontalAlignment.Center;
 			SortOrder = Enum.SortOrder.LayoutOrder;
 			Parent = ItemHolder;
 			Padding = UDim.new(0,5);
 		})
 
-		local UIPadding = self:Create("UIPadding", {
+		local UIPadding = Create("UIPadding", {
 			PaddingTop = UDim.new(0, 5);
 			Parent = ItemHolder;
 		})
@@ -256,148 +385,29 @@ function Library.Util:CreateDropdownHolder(Object, Skeleton)
 			local ObjectPosition = Object.AbsolutePosition
 			Items.Position = UDim2.new(
 				0, math.round(ObjectPosition.X - SkeletonPosition.X),
-				0, math.round(ObjectPosition.Y - SkeletonPosition.Y) + self.Parent.GuiInset.Y
+				0, math.round(ObjectPosition.Y - SkeletonPosition.Y) + GuiInset.Y
 			)
 		end)
 	end
 
 	Items.Parent = Skeleton
-	self.Parent.ObjectCache[Object] = Items
+	self.ObjectCache[Object] = Items
 
 	return Items, ItemHolder
 end
 
-function Library.Util:LoadItemList(Dropdown, ItemList, Callback, IsSelectable)
-	local function PlayState(Tweens, State)
-		for _, Tween in next, Tweens[State] do
-			Tween:Play()
-		end
-	end
+local Library = {
+	Util = {};
+	Theme = {};
+	Objects = {};
+	ObjectCache = {};
+	Tabs = { Skeletons = {}; ActiveTab = nil };
+	Tweens = {};
+	Dropdowns = {};
+}
 
-	local ButtonList = {}
-
-	for Index, Value in ipairs(ItemList) do
-		local IsSelected = (not IsSelectable and true) or (false)
-
-		local Button = self:Create("TextButton", {
-			FontFace = self.Parent.Theme.Font_Regular;
-			Text = "";
-			TextColor3 = Color3.new(0, 0, 0);
-			TextSize = 14;
-			AutoButtonColor = false;
-			BackgroundColor3 = self.Parent.Theme.Background_2;
-			Position = UDim2.new(0.112, 0, 0.02, 0);
-			Size = UDim2.new(1, -10, 0, 20);
-			ZIndex = 20;
-			Name = "Button";
-			Parent = Dropdown;
-		})
-
-		local UICorner = self:Create("UICorner", {
-			CornerRadius = UDim.new(0, 4);
-			Parent = Button;
-		})
-
-		local Label = self:Create("TextLabel", {
-			FontFace = self.Parent.Theme.Font_Regular;
-			RichText = true;
-			Text = Value;
-			TextColor3 = Color3.new(1, 1, 1);
-			TextSize = 16;
-			TextStrokeColor3 = self.Parent.Theme.Background_2;
-			TextWrapped = true;
-			TextXAlignment = Enum.TextXAlignment.Left;
-			AnchorPoint = Vector2.new(0, 0.5);
-			BackgroundColor3 = Color3.new(1, 1, 1);
-			BackgroundTransparency = 1;
-			Position = UDim2.new(0, 5, 0.5, 0);
-			Size = UDim2.new(1, -5, 1, 0);
-			ZIndex = 24;
-			Name = "Label";
-			Parent = Button;
-		})
-
-		local UIStroke = self:Create("UIStroke", {
-			ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
-			Color = self.Parent.Theme.Accent;
-			Parent = Button;
-		})
-
-		local Tweens = {
-			Hover = self:Tween({
-				[Label] = {self.Parent.TweenInfo, { TextTransparency = 0.35 }};
-				[UIStroke] = {self.Parent.TweenInfo, { Transparency = 0.4 }};
-			});
-			Normal = self:Tween({
-				[Label] = {self.Parent.TweenInfo, { TextTransparency = 0.7 }};
-				[UIStroke] = {self.Parent.TweenInfo, { Transparency = 0.6 }};
-			});
-			Pressing = self:Tween({
-				[Label] = {self.Parent.TweenInfo, { TextTransparency = 0.2 }};
-				[UIStroke] = {self.Parent.TweenInfo,  { Transparency = 0.25 }};
-			});
-			Enabled = self:Tween({
-				[Label] = {self.Parent.TweenInfo, { TextTransparency = 0 }};
-				[UIStroke] = {self.Parent.TweenInfo, { Transparency = 0 }};
-			});
-		}
-	
-		local ButtonState, IsHovering = "Normal", false
-	
-		Button.MouseButton1Down:Connect(function()
-			PlayState(Tweens, "Pressing")
-		end)
-	
-		Button.MouseButton1Up:Connect(function()
-			if (not IsSelectable) then
-				PlayState(Tweens, "Normal")
-			else
-				IsSelected = not IsSelected
-			end
-
-			if IsSelected then
-				ButtonState = "Enabled"
-			else
-				ButtonState = IsHovering and "Hover" or "Normal"
-			end
-			Callback(Index, Value, IsSelected)
-			PlayState(Tweens, ButtonState)
-		end)
-	
-		Button.MouseEnter:Connect(function()
-			IsHovering = true
-			ButtonState = "Hover"
-			if IsSelectable and IsSelected then
-				return
-			end
-			PlayState(Tweens, ButtonState)
-		end)
-	
-		Button.MouseLeave:Connect(function()
-			IsHovering = false
-			ButtonState = "Normal"
-			if IsSelectable and IsSelected then 
-				return 
-			end
-			PlayState(Tweens, ButtonState)
-		end)
-	
-		PlayState(Tweens, "Normal")
-
-		ButtonList[Index] = {
-			Button = Button;
-			Select = function(self, SelectedValue, NoCallback)
-				IsSelected = SelectedValue
-				if IsSelected then
-					task.spawn(PlayState, Tweens, (IsSelected and "Enabled") or "Normal")
-				end
-				Callback(Index, Value, IsSelected, NoCallback)
-			end,
-		}
-	end
-
-	return ButtonList
-end
+Library.__index = Library
+Library.Tabs.__index = Library.Tabs
 
 --// UIObject
 local BaseObjects = {}
@@ -405,9 +415,9 @@ BaseObjects.__index = BaseObjects
 
 --// Objects
 function BaseObjects:Button(Data)
-	local ButtonObject = self.Library.Util:Create("Frame", {
+	local ButtonObject = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5);
-		BackgroundColor3 = self.Library.Theme.Background_2;
+		BackgroundColor3 = Theme.Background_2;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0.076, 67, 0.45, 0);
 		Size = UDim2.new(0, 20, 0, 20);
@@ -416,17 +426,17 @@ function BaseObjects:Button(Data)
 		LayoutOrder = Data.LayoutOrder
 	})
 
-	local UICorner = self.Library.Util:Create("UICorner", {
+	local UICorner = Create("UICorner", {
 		CornerRadius = UDim.new(0, 4);
 		Parent = ButtonObject;
 	})
 
-	local UIStroke = self.Library.Util:Create("UIStroke", {
-		Color = self.Library.Theme.Accent;
+	local UIStroke = Create("UIStroke", {
+		Color = Theme.Accent;
 		Parent = ButtonObject;
 	})
 
-	local Button = self.Library.Util:Create("ImageButton", {
+	local Button = Create("ImageButton", {
 		Image = "rbxassetid://10519263435";
 		ScaleType = Enum.ScaleType.Fit;
 		BackgroundColor3 = Color3.new(1, 1, 1);
@@ -438,17 +448,17 @@ function BaseObjects:Button(Data)
 	})
 
 	local Tweens = {
-		Hover = self.Library.Util:Tween({
-			[Button] = {self.TweenInfo, { ImageTransparency = 0.35 }};
-			[UIStroke] = {self.TweenInfo, { Transparency = 0.4 }};
+		Hover = Tween({
+			[Button] = {BaseTweenInfo, { ImageTransparency = 0.35 }};
+			[UIStroke] = {BaseTweenInfo, { Transparency = 0.4 }};
 		});
-		Normal = self.Library.Util:Tween({
-			[Button] = {self.TweenInfo, { ImageTransparency = 0.7 }};
-			[UIStroke] = {self.TweenInfo, { Transparency = 0.6 }};
+		Normal = Tween({
+			[Button] = {BaseTweenInfo, { ImageTransparency = 0.7 }};
+			[UIStroke] = {BaseTweenInfo, { Transparency = 0.6 }};
 		});
-		Pressing = self.Library.Util:Tween({
-			[Button] = {self.TweenInfo, { ImageTransparency = 0 }};
-			[UIStroke] = {self.TweenInfo,  { Transparency = 0.25 }};
+		Pressing = Tween({
+			[Button] = {BaseTweenInfo, { ImageTransparency = 0 }};
+			[UIStroke] = {BaseTweenInfo,  { Transparency = 0.25 }};
 		});
 	}
 
@@ -488,9 +498,9 @@ function BaseObjects:Slider(Data)
 	Data.DecimalPlaces = math.clamp(Data.DecimalPlaces, 0, 99)
 	Data.Format = Data.Format or "%s"
 
-	local SliderObject = self.Library.Util:Create("Frame", {
+	local SliderObject = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5);
-		BackgroundColor3 = self.Library.Theme.Background_2;
+		BackgroundColor3 = Theme.Background_2;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0.076, 67, 0.45, 0);
 		Size = UDim2.new(0, 129, 0, 18);
@@ -499,22 +509,22 @@ function BaseObjects:Slider(Data)
 		LayoutOrder = Data.LayoutOrder;
 	})
 
-	local UICorner = self.Library.Util:Create("UICorner", {
+	local UICorner = Create("UICorner", {
 		CornerRadius = UDim.new(0, 4);
 		Parent = SliderObject;
 	})
 
-	local UIStroke = self.Library.Util:Create("UIStroke", {
-		Color = self.Library.Theme.Accent;
+	local UIStroke = Create("UIStroke", {
+		Color = Theme.Accent;
 		Parent = SliderObject;
 	})
 
-	local Label = self.Library.Util:Create("TextLabel", {
-		FontFace = self.Library.Theme.Font_Regular;
+	local Label = Create("TextLabel", {
+		FontFace = Theme.Font_Regular;
 		Text = "";
 		TextColor3 = Color3.new(1, 1, 1);
 		TextSize = 16;
-		TextStrokeColor3 = self.Library.Theme.Background_2;
+		TextStrokeColor3 = Theme.Background_2;
 		TextStrokeTransparency = 0;
 		TextWrapped = true;
 		BackgroundColor3 = Color3.new(1, 1, 1);
@@ -525,7 +535,7 @@ function BaseObjects:Slider(Data)
 		Parent = SliderObject;
 	})
 
-	local SliderBounds = self.Library.Util:Create("Frame", {
+	local SliderBounds = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0);
 		BackgroundColor3 = Color3.new(1, 1, 1);
 		BackgroundTransparency = 1;
@@ -536,9 +546,9 @@ function BaseObjects:Slider(Data)
 		Parent = SliderObject;
 	})
 
-	local Fill = self.Library.Util:Create("Frame", {
+	local Fill = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5);
-		BackgroundColor3 = self.Library.Theme.Accent;
+		BackgroundColor3 = Theme.Accent;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0, 0, 0.5, 0);
 		Size = UDim2.new(0.5, 0, 1, -2);
@@ -546,23 +556,23 @@ function BaseObjects:Slider(Data)
 		Parent = SliderBounds;
 	})
 
-	local UICorner = self.Library.Util:Create("UICorner", {
+	local UICorner = Create("UICorner", {
 		CornerRadius = UDim.new(0, 4);
 		Parent = Fill;
 	})
 
 	local Tweens = {
-		Normal = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0.5 }};
-			[UIStroke] = {self.TweenInfo, { Transparency = 0.6 }};
+		Normal = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0.5 }};
+			[UIStroke] = {BaseTweenInfo, { Transparency = 0.6 }};
 		});
-		Hover = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0.35 }};
-			[UIStroke] = {self.TweenInfo, { Transparency = 0.2 }};
+		Hover = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0.35 }};
+			[UIStroke] = {BaseTweenInfo, { Transparency = 0.2 }};
 		});
-		Sliding = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0 }};
-			[UIStroke] = {self.TweenInfo,  { Transparency = 0 }};
+		Sliding = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0 }};
+			[UIStroke] = {BaseTweenInfo,  { Transparency = 0 }};
 		});
 	}
 
@@ -592,8 +602,8 @@ function BaseObjects:Slider(Data)
 			end
 		end
 	end
-	local Update = self.Library.Util:SliderUpdateWrapper(SliderBounds, Label, Fill, Data, self)
-	
+	local Update = SliderUpdateWrapper(SliderBounds, Label, Fill, Data, self)
+
 	SliderObject.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 then
 			PlaySliderTween("Sliding")
@@ -630,15 +640,15 @@ function BaseObjects:Slider(Data)
 	end)
 
 	Fill.Size = UDim2.new(
-		self.Library.Util:XToScale(
-			self.Library.Util:MapValue(Data.Default, Data.Min, Data.Max, 0, SliderBounds.AbsoluteSize.X, Data.DecimalPlaces),
+		XToScale(
+			MapValue(Data.Default, Data.Min, Data.Max, 0, SliderBounds.AbsoluteSize.X, Data.DecimalPlaces),
 			SliderBounds
 		),
 		0,
 		1,
 		-2
 	)
-	Label.Text = Data.Format:format(self.Library.Util:Round(Data.Default, Data.DecimalPlaces))
+	Label.Text = Data.Format:format(RoundNumber(Data.Default, Data.DecimalPlaces))
 
 	if not (Data.NoStartCallback) then
 		self.Callback("Slider", Data.Flag, Data.Default)
@@ -648,8 +658,8 @@ end
 function BaseObjects:Toggle(Data)
 	local Value = Data.Default or false 
 
-	local ToggleIndicator = self.Library.Util:Create("Frame", {
-		BackgroundColor3 = self.Library.Theme.Accent;
+	local ToggleIndicator = Create("Frame", {
+		BackgroundColor3 = Theme.Accent;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0, 42, 0, 0);
 		Size = UDim2.new(0, 20, 0, 20);
@@ -658,14 +668,14 @@ function BaseObjects:Toggle(Data)
 		LayoutOrder = Data.LayoutOrder;
 	})
 
-	local ToggleUICorner = self.Library.Util:Create("UICorner", {
+	local ToggleUICorner = Create("UICorner", {
 		CornerRadius = UDim.new(0, 6);
 		Parent = ToggleIndicator;
 	})
 
-	local Background = self.Library.Util:Create("Frame", {
+	local Background = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5);
-		BackgroundColor3 = (Value and self.Library.Theme.Accent) or (self.Library.Theme.Background_3);
+		BackgroundColor3 = (Value and Theme.Accent) or (Theme.Background_3);
 		BorderSizePixel = 0;
 		Position = UDim2.new(0.5, 0, 0.5, 0);
 		Size = UDim2.new(1, -4, 1, -4);
@@ -673,18 +683,18 @@ function BaseObjects:Toggle(Data)
 		Parent = ToggleIndicator;
 	})
 
-	local BackgroundUICorner = self.Library.Util:Create("UICorner", {
+	local BackgroundUICorner = Create("UICorner", {
 		CornerRadius = UDim.new(0, 4);
 		Parent = Background;
 	})
 
-	local UIStroke = self.Library.Util:Create("UIStroke", {
-		Color = self.Library.Theme.Background_2;
+	local UIStroke = Create("UIStroke", {
+		Color = Theme.Background_2;
 		Parent = Background;
 	})
 
-	local Trigger = self.Library.Util:Create("TextButton", {
-		FontFace = self.Library.Theme.Font_Regular;
+	local Trigger = Create("TextButton", {
+		FontFace = Theme.Font_Regular;
 		Text = "";
 		TextColor3 = Color3.new(0, 0, 0);
 		TextSize = 14;
@@ -695,19 +705,19 @@ function BaseObjects:Toggle(Data)
 	})
 
 	local Tweens = {
-		Hover = self.Library.Util:Tween({
-			[ToggleIndicator] = {self.TweenInfo, { Transparency = 0.4 }};
+		Hover = Tween({
+			[ToggleIndicator] = {BaseTweenInfo, { Transparency = 0.4 }};
 		});
-		Pressing = self.Library.Util:Tween({
-			[ToggleIndicator] = {self.TweenInfo, { Transparency = 0.2 }};
+		Pressing = Tween({
+			[ToggleIndicator] = {BaseTweenInfo, { Transparency = 0.2 }};
 		});
-		[true] = self.Library.Util:Tween({
-			[Background] = {self.TweenInfo, { BackgroundColor3 = self.Library.Theme.Accent, Transparency = 0 }};
-			[ToggleIndicator] = {self.TweenInfo,  { Transparency = 0 }};
+		[true] = Tween({
+			[Background] = {BaseTweenInfo, { BackgroundColor3 = Theme.Accent, Transparency = 0 }};
+			[ToggleIndicator] = {BaseTweenInfo,  { Transparency = 0 }};
 		});
-		[false] = self.Library.Util:Tween({
-			[Background] = {self.TweenInfo, { BackgroundColor3 = self.Library.Theme.Background_3, Transparency = 1 }};
-			[ToggleIndicator] = {self.TweenInfo,  { Transparency = 0.6 }};
+		[false] = Tween({
+			[Background] = {BaseTweenInfo, { BackgroundColor3 = Theme.Background_3, Transparency = 1 }};
+			[ToggleIndicator] = {BaseTweenInfo,  { Transparency = 0.6 }};
 		});
 	}
 
@@ -742,13 +752,13 @@ function BaseObjects:Toggle(Data)
 end
 
 function BaseObjects:Label(Data)
-	local Label = self.Library.Util:Create("TextLabel", {
-		FontFace = self.Library.Theme.Font_Regular;
-		TextColor3 = self.Library.Theme.White;
+	local Label = Create("TextLabel", {
+		FontFace = Theme.Font_Regular;
+		TextColor3 = Theme.White;
 		TextSize = 16;
 		TextXAlignment = Enum.TextXAlignment.Left;
 		AnchorPoint = Vector2.new(0, 0.5);
-		BackgroundColor3 = self.Library.Theme.White;
+		BackgroundColor3 = Theme.White;
 		BackgroundTransparency = 1;
 		Position = UDim2.new(0.118, 0, 0.5, 0);
 		Name = "Label";
@@ -759,11 +769,11 @@ function BaseObjects:Label(Data)
 	Label.Size = UDim2.new(0, Label.TextBounds.X, 1, 0);
 
 	local Tweens = {
-		[true] = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0 }};
+		[true] = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0 }};
 		});
-		[false] = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0.3 }};
+		[false] = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0.3 }};
 		});
 	}
 
@@ -772,7 +782,7 @@ function BaseObjects:Label(Data)
 			Tween:Play()
 		end
 	end)
-	
+
 	for _, Tween in next, Tweens[false] do
 		Tween:Play()
 	end
@@ -781,9 +791,9 @@ function BaseObjects:Label(Data)
 end
 
 function BaseObjects:Dropdown(Data, Skeleton)
-	local DropdownObject = self.Library.Util:Create("Frame", {
+	local DropdownObject = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5);
-		BackgroundColor3 = self.Library.Theme.Background_2;
+		BackgroundColor3 = Theme.Background_2;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0.076, 67, 0.45, 0);
 		Size = UDim2.new(0, 129, 0, 18);
@@ -792,8 +802,8 @@ function BaseObjects:Dropdown(Data, Skeleton)
 		LayoutOrder = Data.LayoutOrder;
 	})		
 
-	local Trigger = self.Library.Util:Create("TextButton", {
-		FontFace = self.Library.Theme.Font_Regular;
+	local Trigger = Create("TextButton", {
+		FontFace = Theme.Font_Regular;
 		Text = "";
 		TextColor3 = Color3.new(0, 0, 0);
 		TextSize = 14;
@@ -803,22 +813,22 @@ function BaseObjects:Dropdown(Data, Skeleton)
 		Parent = DropdownObject;
 	})
 
-	local UICorner = self.Library.Util:Create("UICorner", {
+	local UICorner = Create("UICorner", {
 		CornerRadius = UDim.new(0, 4);
 		Parent = DropdownObject;
 	})
 
-	local UIStroke = self.Library.Util:Create("UIStroke", {
-		Color = self.Library.Theme.Accent;
+	local UIStroke = Create("UIStroke", {
+		Color = Theme.Accent;
 		Parent = DropdownObject;
 	})
 
-	local Label = self.Library.Util:Create("TextLabel", {
-		FontFace = self.Library.Theme.Font_Regular;
+	local Label = Create("TextLabel", {
+		FontFace = Theme.Font_Regular;
 		Text = "Item1";
 		TextColor3 = Color3.new(1, 1, 1);
 		TextSize = 16;
-		TextStrokeColor3 = self.Library.Theme.Background_2;
+		TextStrokeColor3 = Theme.Background_2;
 		TextStrokeTransparency = 0;
 		TextXAlignment = Enum.TextXAlignment.Left;
 		BackgroundTransparency = 1;
@@ -830,15 +840,15 @@ function BaseObjects:Dropdown(Data, Skeleton)
 		ClipsDescendants = true;
 	})
 
-	local TransparencyGradient = self.Library.Util:Create("UIGradient", {
+	local TransparencyGradient = Create("UIGradient", {
 		Enabled = false;
 		Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0, 0), NumberSequenceKeypoint.new(0.699999988079071, 0, 0), NumberSequenceKeypoint.new(0.9990000128746033, 0.9998999834060669, 0), NumberSequenceKeypoint.new(1, 0, 0)});
 		Name = "TransparencyGradient";
 		Parent = Label;
 	})
 
-	local Indicator = self.Library.Util:Create("TextLabel", {
-		FontFace = self.Library.Theme.Font_Regular;
+	local Indicator = Create("TextLabel", {
+		FontFace = Theme.Font_Regular;
 		Text = "˄";
 		TextColor3 = Color3.new(1, 1, 1);
 		TextSize = 14;
@@ -850,7 +860,7 @@ function BaseObjects:Dropdown(Data, Skeleton)
 		Parent = DropdownObject;
 	})
 
-	local UIAspectRatioConstraint = self.Library.Util:Create("UIAspectRatioConstraint", {
+	local UIAspectRatioConstraint = Create("UIAspectRatioConstraint", {
 		AspectType = Enum.AspectType.ScaleWithParentSize;
 		DominantAxis = Enum.DominantAxis.Height;
 		Parent = Indicator;
@@ -864,21 +874,21 @@ function BaseObjects:Dropdown(Data, Skeleton)
 	}
 
 	local Tweens = {
-		Normal = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0.5 }};
-			[UIStroke] = {self.TweenInfo, { Transparency = 0.6 }};
+		Normal = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0.5 }};
+			[UIStroke] = {BaseTweenInfo, { Transparency = 0.6 }};
 		});
-		Hover = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0.3 }};
-			[UIStroke] = {self.TweenInfo, { Transparency = 0.4 }};
+		Hover = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0.3 }};
+			[UIStroke] = {BaseTweenInfo, { Transparency = 0.4 }};
 		});
-		Pressing = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0.1 }};
-			[UIStroke] = {self.TweenInfo,  { Transparency = 0.2 }};
+		Pressing = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0.1 }};
+			[UIStroke] = {BaseTweenInfo,  { Transparency = 0.2 }};
 		});
-		Open = self.Library.Util:Tween({
-			[Label] = {self.TweenInfo, { TextTransparency = 0 }};
-			[UIStroke] = {self.TweenInfo,  { Transparency = 0 }};
+		Open = Tween({
+			[Label] = {BaseTweenInfo, { TextTransparency = 0 }};
+			[UIStroke] = {BaseTweenInfo,  { Transparency = 0 }};
 		});
 	}
 
@@ -899,8 +909,8 @@ function BaseObjects:Dropdown(Data, Skeleton)
 
 	local ToggleDropdown, GetDropdownY, GetDropdownX;
 
-	local ListObject, DropdownHolder = self.Library.Util:CreateDropdownHolder(DropdownObject, Skeleton)
-	local ItemList = self.Library.Util:LoadItemList(DropdownHolder, Data.Items, function(Index, Value, Selected, NoCallback)
+	local ListObject, DropdownHolder = CreateDropdownHolder(self.Library, DropdownObject, Skeleton)
+	local ItemList = LoadItemList(DropdownHolder, Data.Items, function(Index, Value, Selected, NoCallback)
 		if (not NoCallback) then
 			self.Callback("Dropdown", Index, Value, Selected)
 		end
@@ -909,15 +919,15 @@ function BaseObjects:Dropdown(Data, Skeleton)
 			if Selected then
 				SelectedItems[#SelectedItems + 1] = Value
 			else
-				local ValueIndex = self.Library.Util:GetIndexOfValue(SelectedItems, Value)
+				local ValueIndex = GetIndexOfValue(SelectedItems, Value)
 				table.remove(SelectedItems, ValueIndex)
 			end
 		else
 			SelectedItems[1] = Value
 		end
 
-		local NewText, SelectedCount = self.Library.Util:ConcatTable(SelectedItems, ", ", true)
-		
+		local NewText, SelectedCount = ConcatTable(SelectedItems, ", ", true)
+
 		if SelectedCount > 0 then
 			Label.TextTransparency = 0 
 			Label.Text = NewText
@@ -925,7 +935,7 @@ function BaseObjects:Dropdown(Data, Skeleton)
 			Label.TextTransparency = 0.4
 			Label.Text = Data.Text
 		end
-		
+
 		TransparencyGradient.Enabled = Label.TextBounds.X > Label.AbsoluteSize.X
 
 		if Data.CloseAfterSelection then
@@ -950,6 +960,7 @@ function BaseObjects:Dropdown(Data, Skeleton)
 		Services.TweenService:Create(ListObject.UIStroke, TweenInfo.new(0.125), {
 			Transparency = IsOpen and 0 or 1
 		}):Play()
+
 		PlayState(IsOpen and "Open" or DropdownState)
 	end
 
@@ -984,7 +995,7 @@ function BaseObjects:Dropdown(Data, Skeleton)
 	Trigger.MouseButton1Down:Connect(function()
 		PlayState("Pressing")
 	end)
-	
+
 	Trigger.MouseButton1Up:Connect(function()
 		ToggleDropdown()
 	end)
@@ -1002,6 +1013,7 @@ function BaseObjects:Dropdown(Data, Skeleton)
 
 	ToggleDropdown(false)
 
+	table.insert(self.Library.Dropdowns, ToggleDropdown)
 	return {
 		UpdateList = function(self, newItems)
 			Data.Items = newItems
@@ -1018,8 +1030,8 @@ function BaseObjects:Information(Data, Skeleton)
 	local TweenInfo1 = TweenInfo.new(0.1, Enum.EasingStyle.Quad)
 	local TweenInfo2 = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
 
-	local Label = self.Library.Util:Create("TextLabel", {
-		FontFace = self.Library.Theme.Font_Regular;
+	local Label = Create("TextLabel", {
+		FontFace = Theme.Font_Regular;
 		Text = "(?)";
 		TextColor3 = Color3.new(1, 1, 1);
 		TextScaled = true;
@@ -1037,24 +1049,24 @@ function BaseObjects:Information(Data, Skeleton)
 		LayoutOrder = Data.LayoutOrder;
 	})
 
-	local UIAspectRatioConstraint = self.Library.Util:Create("UIAspectRatioConstraint", {
+	local UIAspectRatioConstraint = Create("UIAspectRatioConstraint", {
 		AspectType = Enum.AspectType.ScaleWithParentSize;
 		DominantAxis = Enum.DominantAxis.Height;
 		Parent = Label;
 	})
 
-	local InformationFrame, InformationLabel = self.Library.Util:CreateInformationFrame(Label, TabSkeleton)
-	
+	local InformationFrame, InformationLabel = CreateInformationFrame(self.Library, Label, TabSkeleton)
+
 	InformationLabel.Text = Data.Text
-	
+
 	local Tweens = {
-		Hover = self.Library.Util:Tween({
+		Hover = Tween({
 			[Label] = {TweenInfo1, { TextTransparency = 0 }};
 			[InformationLabel] = {TweenInfo2, { TextTransparency = 0 }};
 			[InformationFrame.UIStroke] = {TweenInfo2, { Transparency = 0 }};
 			[InformationFrame] = {TweenInfo2, { BackgroundTransparency = 0 }};
 		});
-		Normal = self.Library.Util:Tween({
+		Normal = Tween({
 			[Label] = {TweenInfo1, { TextTransparency = 0.5 }};
 			[InformationLabel] = {TweenInfo2, { TextTransparency = 1 }};
 			[InformationFrame.UIStroke] = {TweenInfo2, { Transparency = 1 }};
@@ -1069,7 +1081,7 @@ function BaseObjects:Information(Data, Skeleton)
 		local Position = Label.AbsolutePosition
 		local Size = Label.AbsoluteSize
 
-		InformationFrame.Position = self.Library.Util:OffsetUDim2(Position + Vector2.new(15, 15), TabSkeleton)
+		InformationFrame.Position = OffsetUDim2(Position + Vector2.new(15, 15), TabSkeleton)
 		InformationFrame:TweenSize( UDim2.new(0, SizeX, 0, SizeY), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.15, true)
 		for _, Tween in next, Tweens.Hover do
 			Tween:Play()
@@ -1088,16 +1100,16 @@ function BaseObjects:construct()
 	local Hovering = Instance.new("BindableEvent")
 	self.Hovering = Hovering
 
-	local Object = self.Library.Util:Create("Frame", {
-		BackgroundColor3 = self.Library.Theme.White;
+	local Object = Create("Frame", {
+		BackgroundColor3 = Theme.White;
 		BackgroundTransparency = 1;
 		Position = UDim2.new(-0.133, 0, 0.105, 0);
 		Size = UDim2.new(1, 0, 0, 20);
 		Name = "Object";
-		Parent = self.Groupbox.Objects.Container;
+		Parent = self.Groupbox.Container;
 	})
 
-	local UIListLayout = self.Library.Util:Create("UIListLayout", {
+	local UIListLayout = Create("UIListLayout", {
 		Padding = UDim.new(0, 5);
 		FillDirection = Enum.FillDirection.Horizontal;
 		SortOrder = Enum.SortOrder.LayoutOrder;
@@ -1122,8 +1134,7 @@ function BaseObjects.new(Callback, Groupbox, Library)
 	self.Callback = Callback
 	self.Groupbox = Groupbox
 	self.Library = Library
-	self.Container = Groupbox.Objects.Container
-	self.TweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear)
+	self.Container = Groupbox.Container
 	self:construct()
 
 	return self
@@ -1137,7 +1148,7 @@ GroupBox.__index = GroupBox
 function GroupBox:Resize()
 	local GroupboxY = 15
 
-	local Children = self.Objects.Container:GetChildren()
+	local Children = self.Container:GetChildren()
 	local ChildrenCount = #Children
 
 	GroupboxY = GroupboxY + (ChildrenCount * 20) + ((ChildrenCount - 1 ) * 5) 
@@ -1168,8 +1179,8 @@ function GroupBox:Resize()
 
 	CanvasX = CanvasX + ((ObjectCount - 1) * 5)
 
-	self.Objects.Main.Size = UDim2.new(1, -7, 0, GroupboxY)
-	self.Objects.Container.CanvasSize = UDim2.new(0, CanvasX, 0, 0)
+	self.Main.Size = UDim2.new(1, -7, 0, GroupboxY)
+	self.Container.CanvasSize = UDim2.new(0, CanvasX, 0, 0)
 end
 
 function GroupBox:CreateObject(ObjectCallback, ObjectList)
@@ -1182,8 +1193,7 @@ function GroupBox:CreateObject(ObjectCallback, ObjectList)
 			ObjectData["LayoutOrder"] = Index
 		end
 
-		local CreateObjectMethod = BaseObject[ObjectData.Type]
-		CreateObjectMethod(BaseObject, ObjectData, self.Objects.Skeleton)
+		BaseObject[ObjectData.Type](BaseObject, ObjectData, self.Skeleton)
 	end
 
 	self:Resize()
@@ -1193,52 +1203,52 @@ end
 
 function GroupBox:construct()
 	local Tweens = {
-		Hover = self.Library.Util:Tween({
-			[self.Objects.Label] = {self.TweenInfo, { TextTransparency = 0 }};
-			[self.Objects.Stroke] = {self.TweenInfo, { Transparency = 0.4 }};
+		Hover = Tween({
+			[self.Label] = {BaseTweenInfo, { TextTransparency = 0 }};
+			[self.Stroke] = {BaseTweenInfo, { Transparency = 0.4 }};
 		});
-		Normal = self.Library.Util:Tween({
-			[self.Objects.Label] = {self.TweenInfo, { TextTransparency = 0.3 }};
-			[self.Objects.Stroke] = {self.TweenInfo, { Transparency = 0.9 }};
+		Normal = Tween({
+			[self.Label] = {BaseTweenInfo, { TextTransparency = 0.3 }};
+			[self.Stroke] = {BaseTweenInfo, { Transparency = 0.9 }};
 		});
 	}
-	
+
 	local ScrollBarTweens = {
-		Open = Services.TweenService:Create(self.Objects.Container, self.TweenInfo, {
+		Open = Services.TweenService:Create(self.Container, BaseTweenInfo, {
 			ScrollBarThickness = 4
 		}),
-		Closed = Services.TweenService:Create(self.Objects.Container, self.TweenInfo, {
+		Closed = Services.TweenService:Create(self.Container, BaseTweenInfo, {
 			ScrollBarThickness = 1
 		})
 	}
 
 	local LastChange = tick()
 
-	self.Objects.Tab.Objects.Container:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+	self.Tab.Container:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		LastChange = tick()
 	end)
 
 	Services.RunService.RenderStepped:Connect(function()
 		local LastChangeDelta = tick() - LastChange
-		self.Objects.Container.ScrollBarImageTransparency = (LastChangeDelta > 0.5 and 0) or 1
+		self.Container.ScrollBarImageTransparency = (LastChangeDelta > 0.5 and 0) or 1
 	end)
 
-	self.Objects.ScrollBarArea.MouseEnter:Connect(function()
+	self.ScrollBarArea.MouseEnter:Connect(function()
 		ScrollBarTweens.Open:Play()
 	end)
 
-	self.Objects.ScrollBarArea.MouseLeave:Connect(function()
+	self.ScrollBarArea.MouseLeave:Connect(function()
 		ScrollBarTweens.Closed:Play()
 	end)
 
 
-	self.Objects.Main.MouseEnter:Connect(function()
+	self.Main.MouseEnter:Connect(function()
 		for _, Tween in next, Tweens.Hover do
 			Tween:Play()
 		end
 	end)
 
-	self.Objects.Main.MouseLeave:Connect(function()
+	self.Main.MouseLeave:Connect(function()
 		for _, Tween in next, Tweens.Normal do
 			Tween:Play()
 		end
@@ -1251,17 +1261,25 @@ end
 
 function GroupBox.new(Objects)
 	local self = setmetatable({}, GroupBox)
-	self.Objects = Objects
+
+	self.Main = Objects.Main
+	self.Container = Objects.Container
+	self.Stroke = Objects.Stroke
+	self.Label = Objects.Label
+	self.Tab = Objects.Tab
+	self.Skeleton = Objects.Skeleton
 	self.Library = Objects.Library
-	self.TweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear)
+	self.ScrollBarArea = Objects.ScrollBarArea
+
 	self:construct()
+
 	return self
 end
 
 
 --// Tabs
 function Library.Tabs:__CreateTab()
-	local TabContainer = self.Parent.Util:Create("ScrollingFrame", {
+	local TabContainer = Create("ScrollingFrame", {
 		ScrollBarImageColor3 = Color3.new(0, 0, 0);
 		ScrollBarThickness = 0;
 		AnchorPoint = Vector2.new(0.5, 0.5);
@@ -1269,20 +1287,20 @@ function Library.Tabs:__CreateTab()
 		Position = UDim2.new(0.5, 0, 0.5, 0);
 		Size = UDim2.new(1, -20, 1, -20);
 		Name = "Container";
-		Parent = self.Parent.Objects.Main;
+		Parent = self.Parent.Main;
 	})
 
-	local TabSkeleton = self.Parent.Util:Create("Frame", {
+	local TabSkeleton = Create("Frame", {
 		BackgroundColor3 = Color3.new(1, 1, 1);
 		BackgroundTransparency = 1;
 		ZIndex = 10;
 		Name = "TabSkeleton";
-		Parent = self.Parent.Objects.Frames;
+		Parent = self.Parent.Frames;
 		ClipsDescendants = true,
 	})
 
 	--// Left Container
-	local LContainer = self.Parent.Util:Create("Frame", {
+	local LContainer = Create("Frame", {
 		BackgroundTransparency = 1;
 		BorderSizePixel = 0;
 		Size = UDim2.new(0.5, 0, 1, 0);
@@ -1290,7 +1308,7 @@ function Library.Tabs:__CreateTab()
 		Parent = TabContainer;
 	})
 
-	local LSkeleton = self.Parent.Util:Create("Frame", {
+	local LSkeleton = Create("Frame", {
 		BackgroundColor3 = Color3.new(1, 1, 1);
 		BackgroundTransparency = 1;
 		ZIndex = 10;
@@ -1299,20 +1317,20 @@ function Library.Tabs:__CreateTab()
 		ClipsDescendants = true,
 	})
 
-	local LLayout = self.Parent.Util:Create("UIListLayout", {
+	local LLayout = Create("UIListLayout", {
 		Padding = UDim.new(0, 10);
 		HorizontalAlignment = Enum.HorizontalAlignment.Center;
 		SortOrder = Enum.SortOrder.LayoutOrder;
 		Parent = LContainer;
 	})
 
-	local LPadding = self.Parent.Util:Create("UIPadding", {
+	local LPadding = Create("UIPadding", {
 		PaddingTop = UDim.new(0, 1);
 		Parent = LContainer;
 	})
 
 	--// Right Container
-	local RContainer = self.Parent.Util:Create("Frame", {
+	local RContainer = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0);
 		BackgroundTransparency = 1;
 		BorderSizePixel = 0;
@@ -1322,7 +1340,7 @@ function Library.Tabs:__CreateTab()
 		Parent = TabContainer;
 	})
 
-	local RSkeleton = self.Parent.Util:Create("Frame", {
+	local RSkeleton = Create("Frame", {
 		BackgroundColor3 = Color3.new(1, 1, 1);
 		BackgroundTransparency = 1;
 		ZIndex = 10;
@@ -1331,57 +1349,57 @@ function Library.Tabs:__CreateTab()
 		ClipsDescendants = true,
 	})
 
-	local RLayout = self.Parent.Util:Create("UIListLayout", {
+	local RLayout = Create("UIListLayout", {
 		Padding = UDim.new(0, 10);
 		HorizontalAlignment = Enum.HorizontalAlignment.Center;
 		SortOrder = Enum.SortOrder.LayoutOrder;
 		Parent = RContainer;
 	})
 
-	local RPadding = self.Parent.Util:Create("UIPadding", {
+	local RPadding = Create("UIPadding", {
 		PaddingTop = UDim.new(0, 1);
 		Parent = RContainer;
 	})
 
 	--// Tab Button
-	local Button = self.Parent.Util:Create("TextButton", {
-		FontFace = self.Parent.Theme.Font_Regular;
+	local Button = Create("TextButton", {
+		FontFace = Theme.Font_Regular;
 		Text = "";
 		TextColor3 = Color3.new(0, 0, 0);
 		TextSize = 14;
 		AutoButtonColor = false;
-		BackgroundColor3 = self.Parent.Theme.Background_2;
+		BackgroundColor3 = Theme.Background_2;
 		Position = UDim2.new(0.178, 0, 0, 0);
 		Size = UDim2.new(1, -20, 0, 25);
 		Name = "Button";
-		Parent = self.Parent.Objects.Side.Container;
+		Parent = self.Parent.Side.Container;
 	})
 
-	local UIStroke = self.Parent.Util:Create("UIStroke", {
+	local UIStroke = Create("UIStroke", {
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
-		Color = self.Parent.Theme.Accent;
+		Color = Theme.Accent;
 		Parent = Button;
 	})
 
-	local UICorner = self.Parent.Util:Create("UICorner", {
+	local UICorner = Create("UICorner", {
 		CornerRadius = UDim.new(0, 4);
 		Parent = Button;
 	})
 
-	local IconContainer = self.Parent.Util:Create("Frame", {
+	local IconContainer = Create("Frame", {
 		BackgroundTransparency = 1;
 		Size = UDim2.new(1, 0, 1, 0);
 		Name = "IconContainer";
 		Parent = Button;
 	})
 
-	local UIAspectRatioConstraint = self.Parent.Util:Create("UIAspectRatioConstraint", {
+	local UIAspectRatioConstraint = Create("UIAspectRatioConstraint", {
 		AspectType = Enum.AspectType.ScaleWithParentSize;
 		DominantAxis = Enum.DominantAxis.Height;
 		Parent = IconContainer;
 	})
 
-	local Icon = self.Parent.Util:Create("ImageLabel", {
+	local Icon = Create("ImageLabel", {
 		Image = self.Data.Icon or "rbxassetid://10403490626";
 		AnchorPoint = Vector2.new(0.5, 0.5);
 		BackgroundTransparency = 1;
@@ -1391,11 +1409,11 @@ function Library.Tabs:__CreateTab()
 		Parent = IconContainer;
 	})
 
-	local Label = self.Parent.Util:Create("TextLabel", {
-		FontFace = self.Parent.Theme.Font_Regular;
+	local Label = Create("TextLabel", {
+		FontFace = Theme.Font_Regular;
 		RichText = true;
 		Text = self.Data.Title;
-		TextColor3 = self.Parent.Theme.White;
+		TextColor3 = Theme.White;
 		TextSize = 16;
 		TextWrapped = true;
 		TextXAlignment = Enum.TextXAlignment.Left;
@@ -1407,18 +1425,16 @@ function Library.Tabs:__CreateTab()
 		Parent = Button;
 	})
 
-	self.Objects = {
-		TabButton = Button;
-		TabIcon = Icon;
-		TabTitle = Label;
-		Stroke = UIStroke;
-		RContainer = RContainer;
-		LContainer = LContainer;
-		RSkeleton = RSkeleton;
-		LSkeleton = LSkeleton;
-		Skeleton = TabSkeleton;
-		Container = TabContainer;
-	}
+	self.TabButton = Button;
+	self.TabIcon = Icon;
+	self.TabTitle = Label;
+	self.Stroke = UIStroke;
+	self.RContainer = RContainer;
+	self.LContainer = LContainer;
+	self.RSkeleton = RSkeleton;
+	self.LSkeleton = LSkeleton;
+	self.Skeleton = TabSkeleton;
+	self.Container = TabContainer;
 end
 
 function Library.Tabs:SetVisible(Value)
@@ -1430,40 +1446,40 @@ function Library.Tabs:SetVisible(Value)
 		end
 
 		self.Visible = Value
-		self.Objects.Container.Visible = Value
+		self.Container.Visible = Value
 
 		Library.Tabs.ActiveTab = self
 
 		self:PlayButtonState("Enabled")
 
-		self.Objects.Container.Position = UDim2.new(0, 10, 0.5, 0)
+		self.Container.Position = UDim2.new(0, 10, 0.5, 0)
 		self.Tweens.ShowContainer:Play()
 	else
-		self.Objects.Container.Position = UDim2.new(0.5, 0, 0.5, 0)
+		self.Container.Position = UDim2.new(0.5, 0, 0.5, 0)
 
 		self.ButtonState = "Normal"
 		self:PlayButtonState("Normal")
 
 		self.Tweens.HideContainer:Play()
 
-		self.Objects.Container.Visible = false
+		self.Container.Visible = false
 		self.Visible = false
 	end
 end
 
 function Library.Tabs:Groupbox(GroupboxData)
-	local ContainerSkeleton = GroupboxData.Side == 1 and self.Objects.LSkeleton or self.Objects.RSkeleton
-	local Groupbox = self.Parent.Util:Create("Frame", {
-		BackgroundColor3 = self.Parent.Theme.Background_3;
+	local ContainerSkeleton = GroupboxData.Side == 1 and self.LSkeleton or self.RSkeleton
+	local Groupbox = Create("Frame", {
+		BackgroundColor3 = Theme.Background_3;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0, 23, 0, 16);
 		Size = UDim2.new(1, -7, 0, 35);
 		Name = "Groupbox";
 		ClipsDescendants = true,
-		Parent = (GroupboxData.Side == 1 and self.Objects.LContainer) or self.Objects.RContainer;
+		Parent = (GroupboxData.Side == 1 and self.LContainer) or self.RContainer;
 	})
 
-	local ScrollBarArea = self.Parent.Util:Create("Frame", {
+	local ScrollBarArea = Create("Frame", {
 		AnchorPoint = Vector2.new(0, 1);
 		BackgroundColor3 = Color3.new(1, 1, 1);
 		BackgroundTransparency = 1;
@@ -1474,20 +1490,20 @@ function Library.Tabs:Groupbox(GroupboxData)
 		Parent = Groupbox;
 	})
 
-	local UICorner = self.Parent.Util:Create("UICorner", {
+	local UICorner = Create("UICorner", {
 		Parent = Groupbox;
 	})
 
-	local UIStroke = self.Parent.Util:Create("UIStroke", {
-		Color = self.Parent.Theme.Accent;
+	local UIStroke = Create("UIStroke", {
+		Color = Theme.Accent;
 		Transparency = 0.9;
 		Parent = Groupbox;
 	})
 
-	local Label = self.Parent.Util:Create("TextLabel", {
-		FontFace = self.Parent.Theme.Font_Regular;
+	local Label = Create("TextLabel", {
+		FontFace = Theme.Font_Regular;
 		Text = GroupboxData.Title;
-		TextColor3 = self.Parent.Theme.White;
+		TextColor3 = Theme.White;
 		TextSize = 18;
 		TextXAlignment = Enum.TextXAlignment.Left;
 		BackgroundTransparency = 1;
@@ -1496,11 +1512,11 @@ function Library.Tabs:Groupbox(GroupboxData)
 		Parent = Groupbox;
 	})
 
-	local ItemHolder = self.Parent.Util:Create("ScrollingFrame", {
+	local ItemHolder = Create("ScrollingFrame", {
 		BottomImage = "";
 		TopImage = "";
 		CanvasSize = UDim2.new(0, 0, 0, 0);
-		ScrollBarImageColor3 = self.Parent.Theme.Accent;
+		ScrollBarImageColor3 = Theme.Accent;
 		ScrollBarThickness = 3;
 		VerticalScrollBarInset = Enum.ScrollBarInset.Always;
 		AnchorPoint = Vector2.new(0.5, 0);
@@ -1513,7 +1529,7 @@ function Library.Tabs:Groupbox(GroupboxData)
 		Parent = Groupbox;
 	})
 
-	local UIListLayout = self.Parent.Util:Create("UIListLayout", {
+	local UIListLayout = Create("UIListLayout", {
 		Padding = UDim.new(0, 5);
 		HorizontalAlignment = Enum.HorizontalAlignment.Center;
 		SortOrder = Enum.SortOrder.LayoutOrder;
@@ -1533,41 +1549,40 @@ function Library.Tabs:Groupbox(GroupboxData)
 end
 
 function Library.Tabs:construct(Data)
-	local TabTweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear)
 	self.ButtonState = "Normal"
 	self.Data = Data
 
 	self:__CreateTab()
 
 	self.Tweens = {
-		HideContainer = Services.TweenService:Create(self.Objects.Container, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
+		HideContainer = Services.TweenService:Create(self.Container, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
 			Size = UDim2.new(0,0,1,-20),
 			Position = UDim2.new(1,-10,0.5,0)
 		});
-		ShowContainer = Services.TweenService:Create(self.Objects.Container, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { 
+		ShowContainer = Services.TweenService:Create(self.Container, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { 
 			Size = UDim2.new(1,-20,1,-20),
 			Position = UDim2.new(0.5,0,0.5,0)
 		});
 		Button = {
-			Hover = self.Parent.Util:Tween({
-				[self.Objects.Stroke] = {TabTweenInfo, { Transparency = 0.4 }};
-				[self.Objects.TabIcon] = {TabTweenInfo, { ImageTransparency = 0.35 }};
-				[self.Objects.TabTitle] = {TabTweenInfo, { TextTransparency = 0.35 }};
+			Hover = Tween({
+				[self.Stroke] = {BaseTweenInfo, { Transparency = 0.4 }};
+				[self.TabIcon] = {BaseTweenInfo, { ImageTransparency = 0.35 }};
+				[self.TabTitle] = {BaseTweenInfo, { TextTransparency = 0.35 }};
 			});
-			Normal = self.Parent.Util:Tween({
-				[self.Objects.Stroke] = {TabTweenInfo, { Transparency = 0.6 }};
-				[self.Objects.TabIcon] = {TabTweenInfo, { ImageTransparency = 0.5 }};
-				[self.Objects.TabTitle] = {TabTweenInfo, { TextTransparency = 0.5 }};
+			Normal = Tween({
+				[self.Stroke] = {BaseTweenInfo, { Transparency = 0.6 }};
+				[self.TabIcon] = {BaseTweenInfo, { ImageTransparency = 0.5 }};
+				[self.TabTitle] = {BaseTweenInfo, { TextTransparency = 0.5 }};
 			});
-			Pressing = self.Parent.Util:Tween({
-				[self.Objects.Stroke] = {TabTweenInfo, { Transparency = 0.25 }};
-				[self.Objects.TabIcon] = {TabTweenInfo, { ImageTransparency = 0 }};
-				[self.Objects.TabTitle] = {TabTweenInfo, { TextTransparency = 0 }};
+			Pressing = Tween({
+				[self.Stroke] = {BaseTweenInfo, { Transparency = 0.25 }};
+				[self.TabIcon] = {BaseTweenInfo, { ImageTransparency = 0 }};
+				[self.TabTitle] = {BaseTweenInfo, { TextTransparency = 0 }};
 			});
-			Enabled = self.Parent.Util:Tween({
-				[self.Objects.Stroke] = {TabTweenInfo, { Transparency = 0 }};
-				[self.Objects.TabIcon] = {TabTweenInfo, { ImageTransparency = 0 }};
-				[self.Objects.TabTitle] = {TabTweenInfo, { TextTransparency = 0 }};
+			Enabled = Tween({
+				[self.Stroke] = {BaseTweenInfo, { Transparency = 0 }};
+				[self.TabIcon] = {BaseTweenInfo, { ImageTransparency = 0 }};
+				[self.TabTitle] = {BaseTweenInfo, { TextTransparency = 0 }};
 			});
 		};
 	}
@@ -1580,7 +1595,7 @@ function Library.Tabs:construct(Data)
 	end
 
 	--// Tab Button
-	self.Objects.TabButton.MouseButton1Down:Connect(function()
+	self.TabButton.MouseButton1Down:Connect(function()
 		if self.Visible then
 			return
 		end
@@ -1588,7 +1603,7 @@ function Library.Tabs:construct(Data)
 		self:PlayButtonState("Pressing")
 	end)
 
-	self.Objects.TabButton.MouseButton1Up:Connect(function()
+	self.TabButton.MouseButton1Up:Connect(function()
 		if self.Visible then
 			return
 		end
@@ -1597,7 +1612,7 @@ function Library.Tabs:construct(Data)
 		self:SetVisible(true)
 	end)
 
-	self.Objects.TabButton.MouseEnter:Connect(function()
+	self.TabButton.MouseEnter:Connect(function()
 		if self.Visible then
 			return
 		end
@@ -1606,7 +1621,7 @@ function Library.Tabs:construct(Data)
 		self:PlayButtonState()
 	end)
 
-	self.Objects.TabButton.MouseLeave:Connect(function()
+	self.TabButton.MouseLeave:Connect(function()
 		if self.Visible then
 			return
 		end
@@ -1617,27 +1632,27 @@ function Library.Tabs:construct(Data)
 
 	--// Update TabSkeleton
 	local function UpdateContainerSkeleton(ParentPos)
-		local SizeR = self.Objects.RContainer.AbsoluteSize
-		local PositionR = self.Objects.RContainer.AbsolutePosition - ParentPos
-		self.Objects.RSkeleton.Size = UDim2.new(0, SizeR.X, 0, SizeR.Y)
-		self.Objects.RSkeleton.Position = UDim2.new(0, PositionR.X, 0, PositionR.Y)
-		
-		local SizeL = self.Objects.LContainer.AbsoluteSize
-		local PositionL = self.Objects.LContainer.AbsolutePosition - ParentPos
-		self.Objects.LSkeleton.Size = UDim2.new(0, SizeL.X, 0, SizeL.Y)
-		self.Objects.LSkeleton.Position = UDim2.new(0, PositionL.X, 0, PositionL.Y)
+		local SizeR = self.RContainer.AbsoluteSize
+		local PositionR = self.RContainer.AbsolutePosition - ParentPos
+		self.RSkeleton.Size = UDim2.new(0, SizeR.X, 0, SizeR.Y)
+		self.RSkeleton.Position = UDim2.new(0, PositionR.X, 0, PositionR.Y)
+
+		local SizeL = self.LContainer.AbsoluteSize
+		local PositionL = self.LContainer.AbsolutePosition - ParentPos
+		self.LSkeleton.Size = UDim2.new(0, SizeL.X, 0, SizeL.Y)
+		self.LSkeleton.Position = UDim2.new(0, PositionL.X, 0, PositionL.Y)
 	end
 
 	local function UpdateTabSkeleton()
-		local AbsoluteSize, AbsolutePosition = self.Objects.Container.AbsoluteSize, self.Objects.Container.AbsolutePosition
-		self.Objects.Skeleton.Size = UDim2.new(0, AbsoluteSize.X, 0, AbsoluteSize.Y)
-		self.Objects.Skeleton.Position = UDim2.new(0, AbsolutePosition.X, 0, AbsolutePosition.Y)
+		local AbsoluteSize, AbsolutePosition = self.Container.AbsoluteSize, self.Container.AbsolutePosition
+		self.Skeleton.Size = UDim2.new(0, AbsoluteSize.X, 0, AbsoluteSize.Y)
+		self.Skeleton.Position = UDim2.new(0, AbsolutePosition.X, 0, AbsolutePosition.Y)
 
 		UpdateContainerSkeleton(AbsolutePosition)
 	end
 
-	self.Objects.Container:GetPropertyChangedSignal("AbsolutePosition"):Connect(UpdateTabSkeleton)
-	self.Objects.Container:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateTabSkeleton)
+	self.Container:GetPropertyChangedSignal("AbsolutePosition"):Connect(UpdateTabSkeleton)
+	self.Container:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateTabSkeleton)
 end
 
 function Library.Tabs.new(TabData)
@@ -1659,12 +1674,12 @@ end
 
 --// Library Methods
 function Library:__CreateMainUI()
-	local AlaskaUI = self.Util:Create("ScreenGui", {
+	local AlaskaUI = Create("ScreenGui", {
 		Name = "AlaskaUI";
 		Parent = self.UIParent or Services.UIParent;
 	})
 
-	local Frames = self.Util:Create("Frame", {
+	local Frames = Create("Frame", {
 		BackgroundColor3 = Color3.new(1, 1, 1);
 		BackgroundTransparency = 1;
 		Size = UDim2.new(1, 0, 1, 0);
@@ -1672,7 +1687,7 @@ function Library:__CreateMainUI()
 		Parent = AlaskaUI;
 	})
 
-	local UiContainer = self.Util:Create("Frame", {
+	local UiContainer = Create("Frame", {
 		BackgroundTransparency = 1;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0.175, 0, 0.186, 0);
@@ -1683,15 +1698,15 @@ function Library:__CreateMainUI()
 		Active = true;
 	})
 
-	local OuterStroke = self.Util:Create("UIStroke", {
-		Color = self.Theme.Accent;
+	local OuterStroke = Create("UIStroke", {
+		Color = Theme.Accent;
 		Transparency = 0.8;
 		Parent = UiContainer;
 	})
 
-	local Top = self.Util:Create("Frame", {
+	local Top = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0);
-		BackgroundColor3 = self.Theme.Background_1;
+		BackgroundColor3 = Theme.Background_1;
 		BorderSizePixel = 0;
 		Position = UDim2.new(1, 0, 0, 0);
 		Size = UDim2.new(0.714, 0, 0.106, 0);
@@ -1700,9 +1715,9 @@ function Library:__CreateMainUI()
 		Parent = UiContainer;
 	})
 
-	local Divider = self.Util:Create("Frame", {
+	local Divider = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 1);
-		BackgroundColor3 = self.Theme.Divider;
+		BackgroundColor3 = Theme.Divider;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0.5, 0, 1, 0);
 		Size = UDim2.new(1, -10, 0, 1);
@@ -1710,7 +1725,7 @@ function Library:__CreateMainUI()
 		Parent = Top;
 	})
 
-	local TopContainer = self.Util:Create("Frame", {
+	local TopContainer = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5);
 		BackgroundTransparency = 1;
 		Position = UDim2.new(1, -15, 0.5, 0);
@@ -1719,7 +1734,7 @@ function Library:__CreateMainUI()
 		Parent = Top;
 	})
 
-	local UIListLayout = self.Util:Create("UIListLayout", {
+	local UIListLayout = Create("UIListLayout", {
 		Padding = UDim.new(0, 10);
 		FillDirection = Enum.FillDirection.Horizontal;
 		HorizontalAlignment = Enum.HorizontalAlignment.Right;
@@ -1727,16 +1742,16 @@ function Library:__CreateMainUI()
 		Parent = TopContainer;
 	})
 
-	local Side = self.Util:Create("Frame", {
+	local Side = Create("Frame", {
 		BorderSizePixel = 0;
 		Size = UDim2.new(0.287, 0, 1, 0);
 		Name = "Side";
 		Parent = UiContainer;
 	})
 
-	local Background = self.Util:Create("Frame", {
+	local Background = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5);
-		BackgroundColor3 = self.Theme.Background_1;
+		BackgroundColor3 = Theme.Background_1;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0.5, 0, 0.5, 0);
 		Size = UDim2.new(1, 0, 1, 0);
@@ -1745,7 +1760,7 @@ function Library:__CreateMainUI()
 		Parent = Side;
 	})
 
-	local SideContainer = self.Util:Create("ScrollingFrame", {
+	local SideContainer = Create("ScrollingFrame", {
 		ScrollBarImageColor3 = Color3.new(0, 0, 0);
 		ScrollBarThickness = 0;
 		Active = true;
@@ -1758,30 +1773,30 @@ function Library:__CreateMainUI()
 		Parent = Side;
 	})
 
-	local SideListLayout = self.Util:Create("UIListLayout", {
+	local SideListLayout = Create("UIListLayout", {
 		Padding = UDim.new(0, 10);
 		HorizontalAlignment = Enum.HorizontalAlignment.Center;
 		SortOrder = Enum.SortOrder.LayoutOrder;
 		Parent = SideContainer;
 	})
 
-	local SideUIPadding = self.Util:Create("UIPadding", {
+	local SideUIPadding = Create("UIPadding", {
 		PaddingTop = UDim.new(0, 5);
 		Parent = SideContainer;
 	})
 
-	local SideTop = self.Util:Create("Frame", {
+	local SideTop = Create("Frame", {
 		BackgroundTransparency = 1;
-		BackgroundColor3 = self.Theme.Background_1;
+		BackgroundColor3 = Theme.Background_1;
 		Size = UDim2.new(1, 0, 0.106, 0);
 		Name = "Top";
 		BorderSizePixel = 0;
 		Parent = Side;
 	})
 
-	local SideDivider = self.Util:Create("Frame", {
+	local SideDivider = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 1);
-		BackgroundColor3 = self.Theme.Divider;
+		BackgroundColor3 = Theme.Divider;
 		BorderSizePixel = 0;
 		Position = UDim2.new(0.5, 0, 1, 0);
 		Size = UDim2.new(1, -10, 0, 1);
@@ -1789,14 +1804,14 @@ function Library:__CreateMainUI()
 		Parent = SideTop;
 	})
 
-	local IconContainer = self.Util:Create("Frame", {
+	local IconContainer = Create("Frame", {
 		BackgroundTransparency = 1;
 		Size = UDim2.new(1, 0, 1, 0);
 		Name = "IconContainer";
 		Parent = SideTop;
 	})
 
-	local Icon = self.Util:Create("ImageLabel", {
+	local Icon = Create("ImageLabel", {
 		Image = self.Data.Icon or "rbxassetid://10403490626";
 		AnchorPoint = Vector2.new(0.5, 0.5);
 		BackgroundTransparency = 1;
@@ -1806,11 +1821,11 @@ function Library:__CreateMainUI()
 		Parent = IconContainer;
 	})
 
-	local Label = self.Util:Create("TextLabel", {
+	local Label = Create("TextLabel", {
 		Text = self.Data.Title;
-		FontFace = self.Theme.Font_Bold;
+		FontFace = Theme.Font_Bold;
 		RichText = true;
-		TextColor3 = self.Theme.White;
+		TextColor3 = Theme.White;
 		TextScaled = true;
 		TextSize = 18;
 		TextWrapped = true;
@@ -1823,23 +1838,23 @@ function Library:__CreateMainUI()
 		Parent = Icon;
 	})
 
-	local UIAspectRatioConstraint = self.Util:Create("UIAspectRatioConstraint", {
+	local UIAspectRatioConstraint = Create("UIAspectRatioConstraint", {
 		AspectType = Enum.AspectType.ScaleWithParentSize;
 		DominantAxis = Enum.DominantAxis.Height;
 		Parent = IconContainer;
 	})
 
-	local UIGradient = self.Util:Create("UIGradient", {
-		Color = self.Theme.SideGradient;
+	local UIGradient = Create("UIGradient", {
+		Color = Theme.SideGradient;
 		Offset = Vector2.new(-1.2, 0);
 		Rotation = -45;
-		Transparency = self.Theme.SideTransparency,
+		Transparency = Theme.SideTransparency,
 		Parent = Side;
 	})
 
-	local Main = self.Util:Create("Frame", {
+	local Main = Create("Frame", {
 		AnchorPoint = Vector2.new(1, 1);
-		BackgroundColor3 = self.Theme.Background_1;
+		BackgroundColor3 = Theme.Background_1;
 		BorderSizePixel = 0;
 		Position = UDim2.new(1, 0, 1, 0);
 		Size = UDim2.new(0.714, 0, 0.894, 0);
@@ -1848,75 +1863,101 @@ function Library:__CreateMainUI()
 		Parent = UiContainer;
 	})
 
-	self.Objects["Main"] = Main
-	self.Objects["Side"] = Side
-	self.Objects["Top"] = Top
-	self.Objects["Frames"] = Frames
-	self.Objects["UiContainer"] = UiContainer
-	self.Objects["Background"] = Background
-	self.Objects["Label"] = Label
-	self.Objects["SideDivider"] = SideDivider
-	self.Objects["Divider"] = Divider
-	self.Objects["Stroke"] = OuterStroke
+	self.Main = Main
+	self.Side = Side
+	self.Top = Top
+	self.Frames = Frames
+	self.UiContainer = UiContainer
+	self.Background = Background
+	self.Label = Label
+	self.SideDivider = SideDivider
+	self.SideContainer = SideContainer
+	self.Divider = Divider
+	self.Icon = Icon
+	self.Stroke = OuterStroke
+	self.AlaskaUI = AlaskaUI 
 end
 
-function Library:construct(Data)
+function Library.new(Data)
+	local self = setmetatable({}, Library)
+
 	self.UIParent = Data.Parent
-	self.TweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear)
 	self.Util.Parent = self
 	self.Tabs.Parent = self
-
-	self.GuiInset = Services.GuiService:GetGuiInset()
-
-	self.Theme = {
-		Background_1 = Color3.fromRGB(9, 9, 9);
-		Background_2 = Color3.fromRGB(2, 5, 10);
-		Background_3 = Color3.fromRGB(10, 10, 12);
-		Accent = Color3.fromRGB(25, 147, 212);
-		White = Color3.fromRGB(255,255,255);
-		Gray = Color3.fromRGB(255,255,255);
-		Divider = Color3.fromRGB(12, 37, 50);
-		Font_Bold = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal);
-		Font_Regular = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal);
-		SideGradient = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(0.0117647, 0.0823529, 0.117647)), ColorSequenceKeypoint.new(0.518, Color3.new(0.0235294, 0.0235294, 0.0235294)), ColorSequenceKeypoint.new(0.9, Color3.new(0.0235294, 0.0235294, 0.0235294)), ColorSequenceKeypoint.new(1, Color3.new(0.0235294, 0.0235294, 0.0235294))});
-		SideTransparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0, 0), NumberSequenceKeypoint.new(0.1, 0.238, 0), NumberSequenceKeypoint.new(0.497, 0.631, 0), NumberSequenceKeypoint.new(0.891, 0.294, 0), NumberSequenceKeypoint.new(1, 0.131, 0)});
-	};
 
 	self.Data = Data
 
 	self:__CreateMainUI()
 
 	local Tweens = {
-		Hover = self.Util:Tween({
-			[self.Objects.Label] = {self.TweenInfo, { TextTransparency = 0 }};
-			[self.Objects.Background] = {self.TweenInfo, { Transparency = 0 }};
-			[self.Objects.Stroke] = {self.TweenInfo, { Transparency = 0.4 }};
+		Hover = Tween({
+			[self.Label] = {BaseTweenInfo, { TextTransparency = 0 }};
+			[self.Background] = {BaseTweenInfo, { Transparency = 0 }};
+			[self.Stroke] = {BaseTweenInfo, { Transparency = 0.4 }};
 		});
-		Normal = self.Util:Tween({
-			[self.Objects.Label] = {self.TweenInfo, { TextTransparency = 0.5 }};
-			[self.Objects.Background] = {self.TweenInfo, { Transparency = 1 }};
-			[self.Objects.Stroke] = {self.TweenInfo, { Transparency = 0.8 }};
+		Normal = Tween({
+			[self.Label] = {BaseTweenInfo, { TextTransparency = 0.5 }};
+			[self.Background] = {BaseTweenInfo, { Transparency = 1 }};
+			[self.Stroke] = {BaseTweenInfo, { Transparency = 0.8 }};
 		});
+		HideUI = Tween({
+			[self.Top] = { BaseTweenInfo, { BackgroundTransparency = 1 } };
+			[self.Main] = { BaseTweenInfo, { BackgroundTransparency = 1 } };
+			[self.SideDivider] = { BaseTweenInfo, { BackgroundTransparency = 1 } };
+			[self.Divider] = { BaseTweenInfo, { BackgroundTransparency = 1 } };
+			[self.SideContainer] = { BaseTweenInfo, { Size = UDim2.new(1,0,0,0) } };
+			[self.Background] = {BaseTweenInfo, { Transparency = 1 }};
+			[self.Label] = {BaseTweenInfo, { TextTransparency = 1 }};
+			[self.Icon] = {BaseTweenInfo, { ImageTransparency = 1 }};
+			[self.Side] = {BaseTweenInfo, { BackgroundTransparency = 1 }};
+			[self.Stroke] = {BaseTweenInfo, { Transparency = 1 }};
+		});
+		ShowUI = Tween({
+			[self.Top] = { BaseTweenInfo, { BackgroundTransparency = 0 } };
+			[self.Main] = { BaseTweenInfo, { BackgroundTransparency = 0 } };
+			[self.SideDivider] = { BaseTweenInfo, { BackgroundTransparency = 0 } };
+			[self.Divider] = { BaseTweenInfo, { BackgroundTransparency = 0 } };
+			[self.SideContainer] = { BaseTweenInfo, { Size = UDim2.new(1,0,0.894,-8) } };
+			[self.Label] = {BaseTweenInfo, { TextTransparency = 0 }};
+			[self.Icon] = {BaseTweenInfo, { ImageTransparency = 0 }};
+			[self.Side] = {BaseTweenInfo, { BackgroundTransparency = 0 }};
+			[self.Stroke] = {BaseTweenInfo, { Transparency = 0.8 }};
+		})
 	}
-	self.Objects.UiContainer.MouseEnter:Connect(function()
+	self.UiContainer.MouseEnter:Connect(function()
+		if not self.IsVisible then return end
 		for _, Tween in next, Tweens.Hover do
 			Tween:Play()
 		end
 	end)
-	self.Objects.UiContainer.MouseLeave:Connect(function()
+	self.UiContainer.MouseLeave:Connect(function()
+		if not self.IsVisible then return end
 		for _, Tween in next, Tweens.Normal do
 			Tween:Play()
 		end
 	end)
+
 	for _, Tween in next, Tweens.Normal do
 		Tween:Play()
 	end
-end
+	
+	local ToggleKey = Data.ToggleKey or Enum.KeyCode.P
+	self.IsVisible = true
+	UserInputService.InputBegan:Connect(function(Object: InputObject)
+		local Key = Object.KeyCode
 
-function Library.new(LibraryData)
-	local self = setmetatable({}, Library)
+		if Key == ToggleKey then
+			self.IsVisible = not self.IsVisible
+			task.delay(self.IsVisible and 0 or BaseTweenInfo.Time, function()
+				self.AlaskaUI.Enabled = self.IsVisible
+			end)
+			self.Tabs.ActiveTab:SetVisible(self.IsVisible)
+			for _, Tween in next, (self.IsVisible and Tweens.ShowUI) or Tweens.HideUI do
+				Tween:Play()
+			end
+		end
+	end)
 
-	self:construct(LibraryData)
 
 	return self
 end
