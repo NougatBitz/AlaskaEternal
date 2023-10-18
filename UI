@@ -1,3 +1,4 @@
+--// HORRIBLE CODE - I DONT WANNA REWRITE THIS
 local UserInputService = game:GetService("UserInputService")
 local Services = setmetatable({}, {
 	__index = function(self, Index)
